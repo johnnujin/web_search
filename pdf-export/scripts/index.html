@@ -4,7 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Export PDF</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
       body {
         font-family: -apple-system, sans-serif;
@@ -39,6 +38,7 @@
         font-weight: 600;
         cursor: pointer;
         width: 100%;
+        margin-bottom: 10px;
       }
       button:active { opacity: 0.8; }
       .success { color: #2d7a3a; font-weight: 600; margin-top: 16px; display: none; }
@@ -49,109 +49,46 @@
     <div class="card">
       <div class="icon">📄</div>
       <h2 id="doc-title">Your Document</h2>
-      <p id="doc-preview">Ready to export as PDF</p>
-      <button onclick="downloadPDF()">Download PDF</button>
-      <div class="success" id="success-msg">✓ PDF downloaded!</div>
+      <p id="doc-preview">Ready to export</p>
+      <button onclick="downloadHTML()">Download Document</button>
+      <div class="success" id="success-msg">✓ Document ready!</div>
       <div class="error" id="error-msg"></div>
     </div>
 
     <script>
-      let pdfTitle = "Document";
-      let pdfContent = "";
+      let docTitle = "Document";
+      let docContent = "";
 
-      function generatePDF(title, content) {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF({ unit: "pt", format: "a4" });
-
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
-        const margin = 60;
-        const maxWidth = pageWidth - margin * 2;
-        let y = margin;
-
-        // Title
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(22);
-        doc.setTextColor(26, 26, 26);
-        const titleLines = doc.splitTextToSize(title, maxWidth);
-        doc.text(titleLines, margin, y);
-        y += titleLines.length * 28 + 16;
-
-        // Divider
-        doc.setDrawColor(220, 220, 220);
-        doc.setLineWidth(1);
-        doc.line(margin, y, pageWidth - margin, y);
-        y += 24;
-
-        // Date
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(10);
-        doc.setTextColor(150, 150, 150);
-        doc.text(new Date().toLocaleDateString("en-US", {
-          year: "numeric", month: "long", day: "numeric"
-        }), margin, y);
-        y += 28;
-
-        // Body content
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(12);
-        doc.setTextColor(50, 50, 50);
-
-        const paragraphs = content.split(/\n\n+/);
-
-        for (const para of paragraphs) {
-          const lines = para.split(/\n/);
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed) { y += 8; continue; }
-
-            // Check if line looks like a heading (short, no period at end)
-            const isHeading = trimmed.length < 60 && !trimmed.endsWith(".");
-            if (isHeading && paragraphs.indexOf(para) > 0) {
-              doc.setFont("helvetica", "bold");
-              doc.setFontSize(13);
-              doc.setTextColor(26, 26, 26);
-            } else {
-              doc.setFont("helvetica", "normal");
-              doc.setFontSize(12);
-              doc.setTextColor(50, 50, 50);
-            }
-
-            const wrapped = doc.splitTextToSize(trimmed, maxWidth);
-            for (const wline of wrapped) {
-              if (y > pageHeight - margin) {
-                doc.addPage();
-                y = margin;
-              }
-              doc.text(wline, margin, y);
-              y += isHeading ? 20 : 18;
-            }
-          }
-          y += 10; // paragraph spacing
-        }
-
-        // Footer on each page
-        const totalPages = doc.internal.getNumberOfPages();
-        for (let i = 1; i <= totalPages; i++) {
-          doc.setPage(i);
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(9);
-          doc.setTextColor(180, 180, 180);
-          doc.text(
-            `${title} · Page ${i} of ${totalPages}`,
-            margin,
-            pageHeight - 30
-          );
-        }
-
-        return doc;
-      }
-
-      function downloadPDF() {
+      function downloadHTML() {
         try {
-          const doc = generatePDF(pdfTitle, pdfContent);
-          const filename = pdfTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".pdf";
-          doc.save(filename);
+          const html = `<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${docTitle}</title>
+  <style>
+    body { font-family: Georgia, serif; max-width: 700px; margin: 60px auto; padding: 0 20px; color: #222; line-height: 1.7; }
+    h1 { font-size: 28px; border-bottom: 2px solid #eee; padding-bottom: 12px; }
+    .date { color: #999; font-size: 13px; margin-bottom: 32px; }
+    p { margin: 0 0 16px; }
+  </style>
+</head>
+<body>
+  <h1>${docTitle}</h1>
+  <div class="date">${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</div>
+  ${docContent.split(/\n\n+/).map(p => `<p>${p.replace(/\n/g, "<br>")}</p>`).join("\n")}
+</body>
+</html>`;
+
+          const blob = new Blob([html], { type: "text/html" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = docTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".html";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
           document.getElementById("success-msg").style.display = "block";
         } catch (e) {
           const errEl = document.getElementById("error-msg");
@@ -166,27 +103,26 @@
           try {
             parsed = JSON.parse(data);
           } catch (e) {
-            parsed = { title: "Document", content: data };
+            parsed = { title: "Document", content: String(data) };
           }
 
-          pdfTitle = parsed.title || "Document";
-          pdfContent = parsed.content || "";
+          docTitle = parsed.title || "Document";
+          docContent = parsed.content || "";
 
-          if (!pdfContent) {
+          if (!docContent) {
             return JSON.stringify({ error: "No content provided to export." });
           }
 
-          // Update UI
-          document.getElementById("doc-title").textContent = pdfTitle;
-          const preview = pdfContent.substring(0, 80) + (pdfContent.length > 80 ? "..." : "");
+          document.getElementById("doc-title").textContent = docTitle;
+          const preview = docContent.substring(0, 80) + (docContent.length > 80 ? "..." : "");
           document.getElementById("doc-preview").textContent = preview;
 
           return JSON.stringify({
             success: true,
-            message: `PDF ready: "${pdfTitle}". Tap the Download PDF button to save it.`,
+            message: `Document ready: "${docTitle}". Tap the Download button to save it.`,
           });
         } catch (e) {
-          return JSON.stringify({ error: `PDF generation failed: ${e.message}` });
+          return JSON.stringify({ error: `Failed: ${e.message}` });
         }
       };
     </script>
