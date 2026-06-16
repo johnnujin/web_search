@@ -11,23 +11,31 @@
         const url =
           "https://white-resonance-6aac.jnguyenabcd.workers.dev/?q=" +
           encodeURIComponent(query);
-
         const response = await fetch(url, { method: "GET" });
-
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-
         return await response.json();
       }
 
       window["ai_edge_gallery_get_result"] = async (data, secret) => {
         try {
-          const jsonData = JSON.parse(data);
-          if (!jsonData.query) {
+          let query = "";
+
+          // Handle both plain string and JSON object input
+          try {
+            const jsonData = JSON.parse(data);
+            query = jsonData.query || jsonData.q || "";
+          } catch (e) {
+            // data is a plain string, use it directly
+            query = data.trim();
+          }
+
+          if (!query) {
             return JSON.stringify({ error: "No query provided to search." });
           }
-          const searchResponse = await fetchWebSearch(jsonData.query);
+
+          const searchResponse = await fetchWebSearch(query);
           return JSON.stringify(searchResponse);
         } catch (e) {
           console.error(e);
