@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Export PDF</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+      body {
+        font-family: -apple-system, sans-serif;
+        background: #f5f5f5;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        margin: 0;
+        padding: 20px;
+        box-sizing: border-box;
+      }
+      .card {
+        background: white;
+        border-radius: 16px;
+        padding: 32px;
+        max-width: 400px;
+        width: 100%;
+        text-align: center;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      }
+      .icon { font-size: 48px; margin-bottom: 12px; }
+      h2 { margin: 0 0 8px; font-size: 20px; color: #1a1a1a; }
+      p { margin: 0 0 24px; color: #666; font-size: 14px; }
+      button {
+        background: #1a1a1a;
+        color: white;
+        border: none;
+        border-radius: 12px;
+        padding: 14px 28px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        width: 100%;
+      }
+      button:active { opacity: 0.8; }
+      .success { color: #2d7a3a; font-weight: 600; margin-top: 16px; display: none; }
+      .error { color: #c0392b; font-weight: 600; margin-top: 16px; display: none; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="icon">📄</div>
+      <h2 id="doc-title">Your Document</h2>
+      <p id="doc-preview">Ready to export as PDF</p>
+      <button onclick="downloadPDF()">Download PDF</button>
+      <div class="success" id="success-msg">✓ PDF downloaded!</div>
+      <div class="error" id="error-msg"></div>
+    </div>
+
+    <script>
+      let pdfTitle = "Document";
+      let pdfContent = "";
+
+      function generatePDF(title, content) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: "pt", format: "a4" });
+
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 60;
+        const maxWidth = pageWidth - margin * 2;
+        let y = margin;
+
+        // Title
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(22);
+        doc.setTextColor(26, 26, 26);
+        const titleLines = doc.splitTextToSize(title, maxWidth);
+        doc.text(titleLines, margin, y);
+        y += titleLines.length * 28 + 16;
+
+        // Divider
+        doc.setDrawColor(220, 220, 220);
+        doc.setLineWidth(1);
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 24;
+
+        // Date
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(150, 150, 150);
+        doc.text(new Date().toLocaleDateString("en-US", {
+          year: "numeric", month: "long", day: "numeric"
+        }), margin, y);
+        y += 28;
+
+        // Body content
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(12);
+        doc.setTextColor(50, 50, 50);
+
+        const paragraphs = content.split(/\n\n+/);
+
+        for (const para of paragraphs) {
+          const lines = para.split(/\n/);
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) { y += 8; continue; }
+
+            // Check if line looks like a heading (short, no period at end)
+            const isHeading = trimmed.length < 60 && !trimmed.endsWith(".");
+            if (isHeading && paragraphs.indexOf(para) > 0) {
+              doc.setFont("helvetica", "bold");
+              doc.setFontSize(13);
+              doc.setTextColor(26, 26, 26);
+            } else {
+              doc.setFont("helvetica", "normal");
+              doc.setFontSize(12);
+              doc.setTextColor(50, 50, 50);
+            }
+
+            const wrapped = doc.splitTextToSize(trimmed, maxWidth);
+            for (const wline of wrapped) {
+              if (y > pageHeight - margin) {
+                doc.addPage();
+                y = margin;
+              }
+              doc.text(wline, margin, y);
+              y += isHeading ? 20 : 18;
+            }
+          }
+          y += 10; // paragraph spacing
+        }
+
+        // Footer on each page
+        const totalPages = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+          doc.setPage(i);
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(9);
+          doc.setTextColor(180, 180, 180);
+          doc.text(
+            `${title} · Page ${i} of ${totalPages}`,
+            margin,
+            pageHeight - 30
+          );
+        }
+
+        return doc;
+      }
+
+      function downloadPDF() {
+        try {
+          const doc = generatePDF(pdfTitle, pdfContent);
+          const filename = pdfTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".pdf";
+          doc.save(filename);
+          document.getElementById("success-msg").style.display = "block";
+        } catch (e) {
+          const errEl = document.getElementById("error-msg");
+          errEl.textContent = "Error: " + e.message;
+          errEl.style.display = "block";
+        }
+      }
+
+      window["ai_edge_gallery_get_result"] = async (data, secret) => {
+        try {
+          let parsed;
+          try {
+            parsed = JSON.parse(data);
+          } catch (e) {
+            parsed = { title: "Document", content: data };
+          }
+
+          pdfTitle = parsed.title || "Document";
+          pdfContent = parsed.content || "";
+
+          if (!pdfContent) {
+            return JSON.stringify({ error: "No content provided to export." });
+          }
+
+          // Update UI
+          document.getElementById("doc-title").textContent = pdfTitle;
+          const preview = pdfContent.substring(0, 80) + (pdfContent.length > 80 ? "..." : "");
+          document.getElementById("doc-preview").textContent = preview;
+
+          return JSON.stringify({
+            success: true,
+            message: `PDF ready: "${pdfTitle}". Tap the Download PDF button to save it.`,
+          });
+        } catch (e) {
+          return JSON.stringify({ error: `PDF generation failed: ${e.message}` });
+        }
+      };
+    </script>
+  </body>
+</html>
